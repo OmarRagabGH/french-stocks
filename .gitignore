@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+msx_reports/
+geo_risk_map.py
+msx_downloader.py
