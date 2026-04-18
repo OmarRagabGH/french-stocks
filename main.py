@@ -105,25 +105,33 @@ def fetch_one(stock: dict) -> dict:
 
 
 def enrich_with_details(stocks: list[dict]) -> None:
-    """Fetch sector/P/E via .info for all stocks that have a market cap."""
+    """Fetch sector/P/E via .info in batches to avoid rate-limiting."""
     targets = [s for s in stocks if s.get("market_cap") and s.get("sector") == "—"]
     print(f"Enriching {len(targets)} stocks with sector/P/E...", flush=True)
 
     def enrich(s):
-        try:
-            info = yf.Ticker(s["symbol"]).info
-            s["name"] = info.get("longName") or info.get("shortName") or s["name"]
-            s["sector"] = info.get("sector") or "—"
-            s["pe"] = info.get("trailingPE")
-        except Exception:
-            pass
+        import time
+        for attempt in range(3):
+            try:
+                info = yf.Ticker(s["symbol"]).info
+                s["name"] = info.get("longName") or info.get("shortName") or s["name"]
+                s["sector"] = info.get("sector") or "—"
+                s["pe"] = info.get("trailingPE")
+                return
+            except Exception:
+                time.sleep(1 * (attempt + 1))
 
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        futures = [pool.submit(enrich, s) for s in targets]
-        done = 0
-        for _ in as_completed(futures):
-            done += 1
-            print(f"\r  {done}/{len(targets)} enriched", end="", flush=True)
+    # Process in batches of 20 with a short pause between batches
+    batch_size = 20
+    done = 0
+    for i in range(0, len(targets), batch_size):
+        batch = targets[i:i + batch_size]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(as_completed([pool.submit(enrich, s) for s in batch]))
+        done += len(batch)
+        print(f"\r  {done}/{len(targets)} enriched", end="", flush=True)
+        if i + batch_size < len(targets):
+            import time; time.sleep(0.5)
     print()
 
 
@@ -148,7 +156,7 @@ def fetch_all() -> None:
     with _lock:
         _results.sort(key=lambda x: x.get("market_cap") or 0, reverse=True)
 
-    enrich_with_details(_results[:100])  # only top 100 need sector/P/E
+    enrich_with_details(_results)  # enrich all stocks with sector/P/E
 
     with _lock:
         _complete = True
