@@ -6,6 +6,7 @@ Then open: http://localhost:8080
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -51,7 +52,7 @@ def fetch_euronext_stocks() -> list[dict]:
             "sEcho": start // page_size + 1,
         }, timeout=30)
         resp.raise_for_status()
-        data = resp.json()
+        data = json.loads(resp.content.decode("latin-1"))
         if total is None:
             total = data["iTotalRecords"]
             print(f"Euronext Paris: {total} instruments found", flush=True)
