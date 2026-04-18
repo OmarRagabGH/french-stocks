@@ -75,7 +75,7 @@ def fetch_euronext_stocks() -> list[dict]:
 
 
 def fetch_one(stock: dict) -> dict:
-    """Get market cap + price. Uses fast_info first, falls back to info."""
+    """Get market cap + price via fast_info (quick); sector/P/E filled later for top stocks."""
     symbol = stock["symbol"]
     try:
         fi = yf.Ticker(symbol).fast_info
@@ -87,7 +87,6 @@ def fetch_one(stock: dict) -> dict:
                     "currency": currency, "sector": "—", "pe": None}
     except Exception:
         pass
-    # fallback: try .info for market cap
     try:
         info = yf.Ticker(symbol).info
         mc = info.get("marketCap")
@@ -149,7 +148,7 @@ def fetch_all() -> None:
     with _lock:
         _results.sort(key=lambda x: x.get("market_cap") or 0, reverse=True)
 
-    enrich_with_details(_results)
+    enrich_with_details(_results[:100])  # only top 100 need sector/P/E
 
     with _lock:
         _complete = True
@@ -214,7 +213,7 @@ def build_html(stocks: list[dict], done: int, total: int, complete: bool) -> str
 <head>
   <meta charset="UTF-8">
   {refresh}
-  <title>French Stocks — Market Cap Ranking</title>
+  <title>French Stocks Project</title>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -239,7 +238,7 @@ def build_html(stocks: list[dict], done: int, total: int, complete: bool) -> str
   </style>
 </head>
 <body>
-  <h1>🇫🇷 French Stocks — Market Cap Ranking</h1>
+  <h1>French Stocks Project</h1>
   <p class="sub">
     {len(sorted_stocks)} stocks from Euronext Paris &mdash; {updated}
     &nbsp;·&nbsp; <a href="/refresh">Refresh data</a>
