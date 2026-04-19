@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GEO RISK // GODEL TERMINAL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Semi+Condensed:wght@300;400;700&family=Inter:wght@300;400;500;600&family=Oxygen+Mono&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      font-family:'Inter',system-ui,sans-serif;
+      background:#050505;color:#eaeaea;
+      display:flex;flex-direction:column;overflow:hidden;
+    }
+    /* ── Header ── */
+    header{
+      flex-shrink:0;padding:.6rem 1.4rem;
+      border-bottom:1px solid rgba(255,255,255,.07);
+      display:flex;align-items:center;gap:1.2rem;
+      background:#050505;position:relative;
+    }
+    header::after{
+      content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,rgba(51,226,154,.5),transparent 55%);
+    }
+    .hdr-title{
+      font-family:'Sofia Sans Semi Condensed',sans-serif;
+      font-weight:700;font-size:1.05rem;color:#33E29A;
+      letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;
+    }
+    .hdr-dot{
+      display:inline-block;width:6px;height:6px;border-radius:50%;
+      background:#33E29A;margin-right:.55rem;vertical-align:middle;
+      animation:pdot 2.2s ease-in-out infinite;
+    }
+    @keyframes pdot{
+      0%,100%{box-shadow:0 0 5px #33E29A}
+      50%{box-shadow:0 0 12px #33E29A,0 0 22px rgba(51,226,154,.3)}
+    }
+    .hdr-meta{
+      font-family:'Oxygen Mono',monospace;font-size:.65rem;color:#666;
+      border-left:1px solid rgba(255,255,255,.07);padding-left:1.1rem;
+    }
+    .hdr-meta a{color:#33E29A;text-decoration:none}
+    .hdr-meta a:hover{text-decoration:underline}
+    .hdr-time{
+      margin-left:auto;font-family:'Oxygen Mono',monospace;
+      font-size:.65rem;color:#555;letter-spacing:.05em;white-space:nowrap;
+    }
+    /* ── Map ── */
+    #map{flex:1;min-height:0;position:relative;overflow:hidden;cursor:grab}
+    #map:active{cursor:grabbing}
+    #map svg{display:block;width:100%;height:100%}
+    /* ── Legend ── */
+    #legend{
+      position:absolute;right:18px;top:50%;transform:translateY(-50%);
+      display:flex;flex-direction:column;align-items:flex-end;gap:3px;
+      pointer-events:none;
+    }
+    .leg-bar{
+      width:10px;height:18px;border-radius:1px;
+    }
+    .leg-label{
+      font-family:'Oxygen Mono',monospace;font-size:.58rem;color:#555;
+      text-align:right;line-height:18px;margin-right:14px;
+    }
+    .leg-row{display:flex;align-items:center;gap:5px}
+    /* ── Tooltip ── */
+    #tt{
+      position:fixed;display:none;pointer-events:none;z-index:999;
+      background:#0a0a0a;border:1px solid rgba(51,226,154,.3);
+      border-radius:3px;padding:.55rem .75rem;min-width:220px;max-width:300px;
+      box-shadow:0 0 18px rgba(51,226,154,.08);
+    }
+    .tt-name{
+      font-family:'Sofia Sans Semi Condensed',sans-serif;
+      font-size:1rem;font-weight:700;color:#33E29A;
+      letter-spacing:.05em;margin-bottom:.3rem;
+    }
+    .tt-row{
+      font-family:'Oxygen Mono',monospace;font-size:.68rem;
+      color:#B6B6B6;line-height:1.7;
+    }
+    .tt-val{color:#eaeaea}
+    .tt-sep{height:1px;background:rgba(255,255,255,.06);margin:.35rem 0}
+    /* ── Detail panel ── */
+    #detail{
+      flex-shrink:0;background:#07070a;
+      border-top:1px solid rgba(255,255,255,.07);
+      padding:.8rem 1.4rem;min-height:110px;
+      display:flex;gap:0;align-items:stretch;
+      overflow-x:auto;
+    }
+    #detail .placeholder{
+      color:#444;font-size:.75rem;font-family:'Oxygen Mono',monospace;
+      align-self:center;letter-spacing:.06em;
+    }
+    .d-block{
+      display:flex;flex-direction:column;gap:.2rem;
+      min-width:160px;max-width:290px;
+      padding-right:1.3rem;margin-right:1.3rem;
+      border-right:1px solid rgba(255,255,255,.055);
+    }
+    .d-block:last-child{border-right:none;margin-right:0;padding-right:0}
+    .d-block .lbl{
+      font-family:'Oxygen Mono',monospace;font-size:.58rem;
+      text-transform:uppercase;letter-spacing:.1em;color:#555;
+    }
+    .d-block .val{font-size:.86rem;color:#eaeaea;line-height:1.45}
+    /* ── Badges ── */
+    .badge{
+      display:inline-block;padding:.08rem .42rem;border-radius:2px;
+      font-family:'Oxygen Mono',monospace;font-size:.68rem;font-weight:700;
+      border:1px solid;letter-spacing:.04em;
+    }
+    .b1,.b2{background:rgba(51,226,154,.07);color:#33E29A;border-color:rgba(51,226,154,.3)}
+    .b3,.b4{background:rgba(233,184,110,.06);color:#E9B86E;border-color:rgba(233,184,110,.3)}
+    .b5,.b6{background:rgba(233,130,50,.08);color:#f0943a;border-color:rgba(233,130,50,.35)}
+    .b7,.b8{background:rgba(239,68,68,.08);color:#f87171;border-color:rgba(239,68,68,.3)}
+    .b9,.b10{background:rgba(239,68,68,.17);color:#ef4444;border-color:rgba(239,68,68,.55)}
+  </style>
+</head>
+<body>
+<header>
+  <span class="hdr-title"><span class="hdr-dot"></span>GEO RISK TERMINAL</span>
+  <span class="hdr-meta">
+    SCROLL TO ZOOM &nbsp;//&nbsp; DRAG TO PAN &nbsp;//&nbsp; CLICK TO INSPECT &nbsp;//&nbsp;
+    <a href="/refresh">REFRESH DATA</a>
+  </span>
+  <span class="hdr-time">UPDATED 2026-04-18 21:22</span>
+</header>
+
+<div id="map">
+  <div id="legend"></div>
+</div>
+<div id="tt"></div>
+<div id="detail">
+  <p class="placeholder">// SELECT A COUNTRY TO INSPECT</p>
+</div>
+
+<script>
+const D = {"iso3": ["USA", "CAN", "MEX", "GBR", "FRA", "DEU", "ITA", "ESP", "NLD", "SWE", "CHE", "BEL", "AUT", "PRT", "FIN", "NOR", "DNK", "POL", "CZE", "HUN", "ROU", "SRB", "GRC", "UKR", "RUS", "BLR", "MDA", "GEO", "AZE", "ARM", "ISR", "IRN", "SAU", "TUR", "IRQ", "SYR", "YEM", "LBN", "JOR", "ARE", "QAT", "KWT", "PAK", "AFG", "CHN", "JPN", "KOR", "PRK", "TWN", "IND", "BGD", "MMR", "THA", "VNM", "PHL", "MYS", "IDN", "SGP", "HKG", "KAZ", "AUS", "NZL", "ZAF", "NGA", "EGY", "ETH", "KEN", "SDN", "SOM", "LBY", "MAR", "TUN", "DZA", "COD", "CAF", "MLI", "BFA", "NER", "CMR", "MOZ", "ZWE", "AGO", "GHA", "CIV", "SEN", "TZA", "UGA", "BRA", "ARG", "CHL", "COL", "PER", "VEN", "CUB", "HTI", "GTM", "HND", "SLV", "NIC", "ECU", "BOL", "PRY", "URY"], "names": ["United States", "Canada", "Mexico", "United Kingdom", "France", "Germany", "Italy", "Spain", "Netherlands", "Sweden", "Switzerland", "Belgium", "Austria", "Portugal", "Finland", "Norway", "Denmark", "Poland", "Czech Republic", "Hungary", "Romania", "Serbia", "Greece", "Ukraine", "Russia", "Belarus", "Moldova", "Georgia", "Azerbaijan", "Armenia", "Israel", "Iran", "Saudi Arabia", "Turkey", "Iraq", "Syria", "Yemen", "Lebanon", "Jordan", "UAE", "Qatar", "Kuwait", "Pakistan", "Afghanistan", "China", "Japan", "South Korea", "North Korea", "Taiwan", "India", "Bangladesh", "Myanmar", "Thailand", "Vietnam", "Philippines", "Malaysia", "Indonesia", "Singapore", "Hong Kong", "Kazakhstan", "Australia", "New Zealand", "South Africa", "Nigeria", "Egypt", "Ethiopia", "Kenya", "Sudan", "Somalia", "Libya", "Morocco", "Tunisia", "Algeria", "DR Congo", "Cent. African Rep", "Mali", "Burkina Faso", "Niger", "Cameroon", "Mozambique", "Zimbabwe", "Angola", "Ghana", "C\u00f4te d'Ivoire", "Senegal", "Tanzania", "Uganda", "Brazil", "Argentina", "Chile", "Colombia", "Peru", "Venezuela", "Cuba", "Haiti", "Guatemala", "Honduras", "El Salvador", "Nicaragua", "Ecuador", "Bolivia", "Paraguay", "Uruguay"], "risks": [3, 3, 5, 2, 3, 3, 3, 3, 2, 2, 1, 2, 2, 2, 2, 2, 2, 3, 2, 4, 3, 5, 4, 10, 10, 7, 5, 5, 5, 5, 8, 8, 5, 5, 6, 7, 8, 7, 4, 3, 3, 3, 6, 9, 6, 2, 3, 9, 6, 4, 5, 8, 4, 3, 3, 3, 3, 2, 5, 4, 2, 2, 4, 5, 4, 7, 4, 9, 8, 7, 3, 5, 4, 8, 8, 7, 7, 7, 5, 6, 5, 4, 3, 4, 3, 3, 4, 3, 4, 3, 4, 4, 6, 6, 9, 5, 6, 4, 7, 5, 4, 3, 2], "labels": ["Low", "Low", "Medium", "Very Low", "Low", "Low", "Low", "Low", "Very Low", "Very Low", "Very Low", "Very Low", "Very Low", "Very Low", "Very Low", "Very Low", "Very Low", "Low", "Very Low", "Low-Med", "Low", "Medium", "Low-Med", "Extreme", "Extreme", "High", "Medium", "Medium", "Medium", "Medium", "High", "High", "Medium", "Medium", "Med-High", "High", "High", "High", "Low-Med", "Low", "Low", "Low", "Med-High", "Extreme", "Med-High", "Very Low", "Low", "Extreme", "Med-High", "Low-Med", "Medium", "High", "Low-Med", "Low", "Low", "Low", "Low", "Very Low", "Medium", "Low-Med", "Very Low", "Very Low", "Low-Med", "Medium", "Low-Med", "High", "Low-Med", "Extreme", "High", "High", "Low", "Medium", "Low-Med", "High", "High", "High", "High", "High", "Medium", "Med-High", "Medium", "Low-Med", "Low", "Low-Med", "Low", "Low", "Low-Med", "Low", "Low-Med", "Low", "Low-Med", "Low-Med", "Med-High", "Med-High", "Extreme", "Medium", "Med-High", "Low-Med", "High", "Medium", "Low-Med", "Low", "Very Low"], "factors": ["Political polarization, tariff wars, debt", "US tariff threats, sovereignty tensions", "Cartel violence, US trade war pressure", "Post-Brexit adjustment, fiscal pressure", "Political fragmentation, pension protests", "Recession risk, energy costs, AfD surge", "High debt, coalition fragility", "Catalan tensions, minority government", "Wilders coalition, stable institutions", "NATO member, gang crime", "Neutral, stable institutions", "Political deadlock, coalition", "FP\u00d6-led government, EU friction", "Stable, minority government", "NATO member, Russia border", "Stable, energy exporter", "US Greenland pressure, stable", "Ukraine border, NATO frontline, rule-of-law", "Stable, EU member", "Democratic backsliding, Russia ties, EU clashes", "Ukraine border, election uncertainty", "Kosovo tensions, EU path stalled, Vucic", "Turkey maritime tensions, migration", "Active war with Russia, ceasefire talks", "War in Ukraine, deep Western sanctions", "Lukashenko regime, Russia proxy, sanctions", "Transnistria, Russian pressure, energy risk", "Russian occupied territories, protests", "Post-Karabakh tensions, Aliyev authoritarianism", "Post-war reconstruction, Russia distancing", "Gaza war, Iran conflict, regional escalation", "Nuclear talks, proxy wars, sanctions", "Yemen war, Vision 2030 disruption risk", "Inflation crisis, Kurdish conflict, Syria", "Iranian militia influence, ISIS remnants", "Post-Assad fragile transition, armed factions", "Civil war, Houthi attacks on Red Sea shipping", "Post-war reconstruction, economic collapse", "Palestinian refugee pressure, regional spillover", "Stable, Abraham Accords diplomacy", "Gas-rich, diplomatic broker role", "Stable, parliamentary deadlock", "Political crisis, India tensions, IMF dependency", "Taliban rule, humanitarian crisis, isolation", "Taiwan strait, US trade war, property crisis", "Stable, NK/China proximity risk", "NK threat, martial law crisis resolved", "Nuclear/missile program, Russia alliance", "China PLA pressure, strait incidents", "Pakistan/China border tensions", "Political transition post-Hasina, flooding", "Civil war, military junta vs resistance", "Political instability, royalist tensions", "South China Sea disputes", "South China Sea confrontations", "South China Sea, coalition politics", "Prabowo transition stable so far", "Stable, regional trade hub", "National security law, China control", "Russia dependency, political fragility", "Stable, China trade relationship managed", "Stable", "Load shedding, ANC coalition fragility", "Boko Haram, currency crisis, Tinubu reforms", "Economic crisis, IMF austerity, Gaza border", "Amhara conflict, Tigray aftermath, Red Sea", "Political protests, debt crisis", "Civil war RSF vs SAF, famine, 10M displaced", "Al-Shabaab, state fragility", "Split government, eastern/western factions", "Western Sahara dispute", "Saied authoritarianism, economic crisis", "Sahel spillover, political stagnation", "M23/Rwanda conflict, eastern instability", "Wagner-linked armed groups, fragile state", "Junta rule, jihadist insurgency, Wagner", "Junta, jihadist insurgency, Wagner", "Junta coup 2023, ECOWAS tensions", "Anglophone separatist crisis", "Cabo Delgado insurgency, election unrest", "Economic mismanagement, Mnangagwa", "Oil dependency, governance deficit", "Debt restructuring complete, stable", "Sahel spillover risk, 2025 election", "Stable transition, offshore oil coming", "Stable", "DRC spillover, Museveni authoritarianism", "Political polarization, fiscal concerns", "Milei austerity shock, inflation easing", "Stable post-constitution, lithium politics", "FARC dissidents, Petro reforms, ELN talks", "Political instability, protests, Boluarte", "Maduro autocracy, disputed election, migration", "Economic collapse, blackouts, sanctions", "Gang control of capital, state collapse", "Gang violence, Ar\u00e9valo vs elites", "Gang violence, Castro government instability", "Bukele authoritarianism, Bitcoin experiment", "Ortega dictatorship, political prisoners", "Gang violence, state of emergency", "Coup attempts, Arce vs Morales split", "Stable, corruption concerns", "Stable democracy"], "etfs": ["IVV  $713.36  YTD +4.2%", "EWC  $58.52  YTD +8.0%", "EWW  $79.46  YTD +14.1%", "EWU  $48.25  YTD +8.5%", "EWQ  $46.76  YTD +3.2%", "EWG  $43.19  YTD +1.5%", "EWI  $58.72  YTD +6.5%", "EWP  $58.39  YTD +6.8%", "EWN  $64.12  YTD +9.3%", "EWD  $54.37  YTD +9.6%", "EWL  $62.44  YTD +3.5%", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "EPOL  $40.64  YTD +12.1%", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "GREK  $72.93  YTD +8.1%", "No iShares ETF", "ERUS  $0.03  YTD -99.6%", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "EIS  $129.81  YTD +15.9%", "No iShares ETF", "KSA  $40.59  YTD +10.4%", "TUR  $43.37  YTD +24.2%", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "QAT  $19.38  YTD +3.0%", "KWT  $38.82  YTD +1.4%", "PAK", "No iShares ETF", "MCHI  $59.29  YTD -4.7%", "EWJ  $90.19  YTD +10.9%", "EWY  $152.33  YTD +49.0%", "No iShares ETF", "EWT  $83.22  YTD +28.5%", "INDA  $51.28  YTD -6.0%", "No iShares ETF", "No iShares ETF", "THD  $71.96  YTD +20.1%", "VNM  $19.04  YTD -0.4%", "EPHE  $25.51  YTD +0.8%", "EWM  $29.16  YTD +6.3%", "EIDO  $16.54  YTD -12.1%", "EWS  $29.41  YTD +6.0%", "EWH  $23.47  YTD +7.3%", "No iShares ETF", "EWA  $30.21  YTD +14.1%", "ENZL  $44.57  YTD -2.0%", "EZA  $74.62  YTD +7.5%", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "EWZ  $41.16  YTD +27.8%", "ARGT  $93.76  YTD +2.9%", "ECH  $44.97  YTD +11.4%", "GXG  $41.01  YTD +16.1%", "EPU  $85.17  YTD +17.1%", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF", "No iShares ETF"], "news": ["LSE United States Politics and Policy", "Carney\u2019s Liberal Majority Reshapes Fortunes to the Left and the Right", "Economic Impact of the U.S.\u2013Israel\u2013Iran Conflict on Mexico", "How unpopular is Britain\u2019s Labour government?", "France and UK chair meeting on post-conflict Strait of Hormuz mission", "Exclusive: German government halves 2026 growth forecast to 0.5% amid Iran war, source says", "Italy suspends defense cooperation with Israel amid Middle East conflict", "While Trump lashes out at Spain, US Democrats join a progressive rally in Barcelona", "Mark Rutte | History, Prime Ministership, NATO, & Facts", "\u2018Reckless\u2019: Sweden warns of \u2018destructive\u2019 new phase in Russian cyber warfare", "DRC and M23 rebels eye peace monitoring agreement in Switzerland", "Iran conflict and energy\u2011price surge put Belgium on alert over market default bets", "The Far Right Is Winning In Austria\u2014Even In Opposition", "Flows into core equity ETFs hold up amid Middle East conflict", "President of Finland Speaks in Ottawa \u2013 April 15, 2026", "Norway oil export earnings jump 68% to $6.1B in March amid Iran conflict", "Denmark\u2019s politics is all a bit chaotic right now \u2013 but Danes like it that way", "Poland prepares parishes for wartime role as fears of conflict grow", "Czech Republic's NATO Spending Commitment: Balancing Defense and Priorities", "How much Orban influence remains in Hungary's politics?", "Romania Premier Bolojan Vows to Stay On as Top Party Pushes for Ouster", "The \u201cSerbian P\u00e9ter Magyar\u201d does not exist", "Greece\u2019s deputy agriculture minister resigns over degree fraud", "Russia-Ukraine War | Map, Casualties, Timeline, Death Toll, Causes, & Significance", "Russian Influencers Turn From Cosmetics To Politics, But Don't Mention The War", "Zelenskyy warns Russia aims to involve Belarus in Ukraine conflict", "Deadlock in Moldova-Transdniestria Talks: A Roadblock to EU Ambitions", "Rick Jackson cannonballed into the governor race. It\u2019s having ripple effects across Georgia.", "Azerbaijan - Administration, Social, Conditions", "Rewiring the South Caucasus: TRIPP and the New Geopolitics of Connectivity", "President Trump on U.S.-Israel Conflict with Iran", "Iran war: What is happening on day 50 of the US-Iran conflict?", "Saudi Arabia's non-oil business activity shrinks in March amid conflict, PMI shows", "Turkey says it has no plans to stop Iran energy imports", "Iraq War | Summary, Causes, Dates, Combatants, Casualties, & Facts", "\u2018Now is the moment to invest\u2019: Syria needs global backing, says UN expert", "Conflict in Yemen and the Red Sea | Global Conflict Tracker", "What to know about the Israel-Lebanon conflict", "Jordanian foreign minister says \u2018root causes of conflict\u2019 must be addressed for regional stability", "UAE Fujairah marine fuel sales slump after US-Iran conflict disrupts activity", "As Sudan Conflict Enters Fourth Year, Qatar Charity Aids One Million [EN/AR]", "Kuwait\u2019s financial strength stands out as Fitch flags regional risks from US\u2013Iran conflict", "Amid Iran War Talks, China Tests Its Clout In Pakistan-Taliban Conflict", "Instability in Afghanistan | Global Conflict Tracker", "Four scenarios for geopolitics after the Iran war", "LDP and JIP remain divided over revision of Constitution's Article 9", "Reactionary Politics in South Korea: Historical Legacies, Far-Right Intellectuals, and Political Mobilization", "Seoul says it is unaware of U.S. protest over minister's remarks on North Korea nuclear site", "China changes tactics on Taiwan and Japan amid Middle East chaos", "How did the 2025 India-Pakistan conflict change global politics? \ud83c\udfa7", "Iran war and the bankruptcy of Bangladesh foreign policy", "Little hope for Myanmar democracy despite release of Suu Kyi aide", "Cambodian-Thai conflict exposes ASEAN limits", "Vietnam War | Facts, Summary, Years, Timeline, Casualties, Combatants, & Facts", "Energy crisis revives push to drill in Philippines\u2019 largest intact wetland - news", "Anwar Says Mideast States Are Using Malaysia to Engage Iran", "Indonesia and the politics of platform governance", "Middle East conflict impact on Singapore real estate", "Hong Kong - Politics, Economy, Society", "Kazakhstan Freezes Projects with Iran Amid Military Conflict", "Virgin Australia flags higher fuel costs amid the Mideast conflict", "Christopher Luxon | Life, Business, Politics, Prime Minister, Trivia, & Facts", "South Africa's Malema faces political crisis after jail sentence in firearm case", "Defying conflict to track the world\u2019s rarest chimpanzees - news", "Egypt\u2019s Discrete Role in the Ceasefire with Iran", "What\u2019s driving renewed conflict between Ethiopia and Eritrea?", "Exploring giraffe-human conflict in Kenya - news", "Civil War in Sudan | Global Conflict Tracker", "T\u00fcrkiye in Somalia: Geopolitics, investment and energy | Daily Sabah", "Korea explores crude oil, naphtha supply with Algeria, Libya amid Mideast conflict", "How Jewish heritage projects in Morocco are being used to push pro-Israel politics", "15 years later, is a new Tunisian revolution possible?", "Pope Leo XIV in Algeria: Where There Is Conflict the Church Brings Reconciliation", "SECURITY COUNCIL LIVE: Security fears rise in eastern DR Congo", "Central African Republic - Conflict, Poverty, Instability", "Conflict Has Memory: Why Local Wars Follow Distinct Trajectories", "Burkina Faso: Moving forward without democracy", "Niger - Independence, Conflict, Sahel", "Pope slams 'tyrants' on Cameroon conflict visit after spat with Trump", "Mozambique Conflict Monitor Update: 25 March 2026", "Zimbabwe - Elections, Aftermath, Politics", "Brazil and Angola create opportunities in animal genetics", "Kwame Nkrumah | Death, Overthrown, Education, Contributions, & Ghana", "C\u00f4te d\u2019Ivoire - Politics, Economy, Culture", "Senegal bans ministers from foreign travel as oil price rise bites", "Outlook on BoT MPC amid US-Iran conflict delay decision April 2026", "Yoweri Museveni | Biography, Age, Presidential Term, Election, & Facts", "Brazil's Lula and S\u00e1nchez of Spain headline meetings of progressive leaders in Barcelona", "Javier Milei | Policies, Polls, Dogs, & CPAC", "Chilean President Kast Pitches Flagship Economic Bill Including Corporate Tax Cut", "From conflict to catwalk: Women ex-combatants weave reconciliation in Colombia", "Fractured politics, security fears shape Peru\u2019s presidential election", "Venezuela\u2019s Machado says \u2018no regrets\u2019 about giving her Nobel Prize to Trump", "Cuban president defiant amid US pressure and energy blockade threats", "Haiti hunger crisis deepens as almost 6 million face acute food insecurity", "In Ar\u00e9valo\u2019s Guatemala, It\u2019s Not \u201cSpring\u201d Quite Yet", "Honduras - Central America, Caribbean, Politics", "Nayib Bukele | Biography, Family, Gang Crackdown, Popularity, & Ethnicity", "Nicaragua: When They Teach Us to Hate Our Neighbors", "Ecuador Lets Trans Teens Be Seen as Politics Looks Away", "Bolivia - Civilian Rule, Democracy, Elections", "Paraguay's Diplomatic Crossroads: China vs. Taiwan", "Uruguay\u2019s Orsi Confronts Economic Headwinds and Shifting Geopolitics"], "gdps": ["$28.8T", "$2.1T", "$1.8T", "$3.3T", "$3.1T", "$4.5T", "$2.3T", "$1.7T", "$1.1T", "$600B", "$920B", "$650B", "$530B", "$280B", "$310B", "$560B", "$410B", "$810B", "$340B", "$220B", "$350B", "$75B", "$245B", "$178B", "$2.0T", "$75B", "$17B", "$30B", "$80B", "$25B", "$520B", "$410B", "$1.1T", "$1.1T", "$270B", "$22B", "$21B", "$23B", "$50B", "$530B", "$220B", "$175B", "$375B", "$14B", "$18.5T", "$4.2T", "$1.8T", "$18B", "$790B", "$3.7T", "$460B", "$65B", "$550B", "$430B", "$440B", "$430B", "$1.4T", "$500B", "$380B", "$270B", "$1.7T", "$250B", "$400B", "$500B", "$395B", "$165B", "$115B", "$35B", "$12B", "$45B", "$145B", "$48B", "$240B", "$65B", "$3B", "$22B", "$20B", "$17B", "$45B", "$20B", "$30B", "$95B", "$75B", "$75B", "$30B", "$85B", "$50B", "$2.3T", "$600B", "$340B", "$360B", "$260B", "$95B", "$107B", "$20B", "$95B", "$32B", "$34B", "$16B", "$122B", "$45B", "$45B", "$75B"], "debts": ["122%", "107%", "51%", "100%", "112%", "64%", "137%", "107%", "49%", "31%", "38%", "107%", "79%", "99%", "79%", "44%", "31%", "54%", "43%", "73%", "52%", "55%", "161%", "97%", "19%", "45%", "30%", "42%", "22%", "56%", "62%", "35%", "26%", "33%", "50%", "N/A", "N/A", "170%", "93%", "30%", "48%", "3%", "74%", "N/A", "88%", "255%", "54%", "N/A", "28%", "86%", "39%", "62%", "64%", "36%", "60%", "67%", "40%", "168%", "2%", "26%", "53%", "53%", "74%", "39%", "95%", "30%", "72%", "183%", "N/A", "5%", "70%", "80%", "55%", "17%", "50%", "55%", "60%", "55%", "44%", "102%", "97%", "87%", "83%", "60%", "75%", "44%", "52%", "88%", "89%", "37%", "55%", "33%", "304%", "N/A", "20%", "28%", "45%", "83%", "47%", "59%", "81%", "41%", "68%"], "growths": ["+2.7%", "+1.4%", "-0.3%", "+1.1%", "+0.7%", "+0.0%", "+0.4%", "+2.5%", "+1.7%", "+2.2%", "+1.2%", "+1.0%", "+0.8%", "+2.1%", "+0.9%", "+1.6%", "+2.1%", "+3.5%", "+2.3%", "+2.5%", "+2.7%", "+3.5%", "+2.3%", "+3.0%", "+1.5%", "+2.5%", "+3.0%", "+5.0%", "+2.8%", "+5.5%", "+3.2%", "+3.1%", "+3.2%", "+3.0%", "+3.5%", "N/A", "N/A", "+3.5%", "+2.5%", "+4.1%", "+2.3%", "+2.7%", "+3.5%", "N/A", "+4.6%", "+0.6%", "+1.0%", "N/A", "+2.8%", "+6.5%", "+5.5%", "+1.0%", "+2.9%", "+6.5%", "+5.8%", "+4.4%", "+4.8%", "+2.3%", "+2.2%", "+5.2%", "+1.8%", "+2.0%", "+1.5%", "+3.6%", "+4.5%", "+7.5%", "+5.3%", "-3.0%", "+3.0%", "+4.5%", "+3.8%", "+2.2%", "+2.9%", "+6.3%", "+2.5%", "+3.5%", "+3.5%", "+12.0%", "+4.5%", "+4.0%", "+3.5%", "+2.8%", "+4.0%", "+6.3%", "+8.5%", "+5.5%", "+5.8%", "+2.2%", "+5.0%", "+2.3%", "+2.7%", "+3.0%", "+4.0%", "N/A", "-1.0%", "+3.5%", "+3.2%", "+3.0%", "+4.0%", "+2.0%", "+2.5%", "+4.0%", "+3.1%"]};
+
+// ── ISO numeric -> alpha-3 lookup ──
+const N2A = {
+  4:'AFG',8:'ALB',12:'DZA',24:'AGO',32:'ARG',36:'AUS',40:'AUT',
+  50:'BGD',56:'BEL',68:'BOL',76:'BRA',100:'BGR',104:'MMR',112:'BLR',
+  120:'CMR',124:'CAN',140:'CAF',144:'LKA',152:'CHL',156:'CHN',170:'COL',
+  180:'COD',192:'CUB',203:'CZE',208:'DNK',218:'ECU',222:'SLV',231:'ETH',
+  246:'FIN',250:'FRA',268:'GEO',276:'DEU',288:'GHA',300:'GRC',320:'GTM',
+  332:'HTI',340:'HND',344:'HKG',348:'HUN',356:'IND',360:'IDN',364:'IRN',
+  368:'IRQ',376:'ISR',380:'ITA',384:'CIV',392:'JPN',398:'KAZ',400:'JOR',
+  404:'KEN',408:'PRK',410:'KOR',414:'KWT',422:'LBN',434:'LBY',458:'MYS',
+  466:'MLI',484:'MEX',498:'MDA',504:'MAR',508:'MOZ',528:'NLD',558:'NIC',
+  562:'NER',566:'NGA',578:'NOR',586:'PAK',600:'PRY',604:'PER',608:'PHL',
+  616:'POL',620:'PRT',634:'QAT',642:'ROU',643:'RUS',682:'SAU',686:'SEN',
+  688:'SRB',702:'SGP',704:'VNM',706:'SOM',710:'ZAF',716:'ZWE',724:'ESP',
+  729:'SDN',752:'SWE',756:'CHE',760:'SYR',764:'THA',788:'TUN',792:'TUR',
+  800:'UGA',804:'UKR',818:'EGY',826:'GBR',834:'TZA',840:'USA',854:'BFA',
+  858:'URY',862:'VEN',887:'YEM',51:'ARM',31:'AZE',158:'TWN',
+};
+
+// ── ISO3 → ISO2 for flag emoji ──
+const A3_A2 = {
+  USA:'US',GBR:'GB',FRA:'FR',DEU:'DE',JPN:'JP',CHN:'CN',IND:'IN',BRA:'BR',
+  RUS:'RU',CAN:'CA',AUS:'AU',KOR:'KR',MEX:'MX',IDN:'ID',TUR:'TR',SAU:'SA',
+  ZAF:'ZA',ARG:'AR',NGA:'NG',EGY:'EG',PAK:'PK',BGD:'BD',ETH:'ET',VNM:'VN',
+  PHL:'PH',COD:'CD',IRN:'IR',THA:'TH',MYS:'MY',POL:'PL',UKR:'UA',COL:'CO',
+  ESP:'ES',ITA:'IT',NLD:'NL',BEL:'BE',SWE:'SE',NOR:'NO',FIN:'FI',DNK:'DK',
+  CHE:'CH',AUT:'AT',PRT:'PT',GRC:'GR',CZE:'CZ',ROU:'RO',HUN:'HU',BGR:'BG',
+  HRV:'HR',SVN:'SI',SVK:'SK',LTU:'LT',LVA:'LV',EST:'EE',ISR:'IL',IRQ:'IQ',
+  SYR:'SY',LBN:'LB',JOR:'JO',KWT:'KW',ARE:'AE',QAT:'QA',OMN:'OM',YEM:'YE',
+  AFG:'AF',KAZ:'KZ',UZB:'UZ',TKM:'TM',AZE:'AZ',ARM:'AM',GEO:'GE',BLR:'BY',
+  MDA:'MD',SRB:'RS',BIH:'BA',MNE:'ME',MKD:'MK',ALB:'AL',KEN:'KE',TZA:'TZ',
+  GHA:'GH',CIV:'CI',CMR:'CM',MOZ:'MZ',MDG:'MG',AGO:'AO',ZMB:'ZM',ZWE:'ZW',
+  SEN:'SN',MLI:'ML',BFA:'BF',TCD:'TD',NER:'NE',SOM:'SO',SSD:'SS',SDN:'SD',
+  LBY:'LY',MAR:'MA',TUN:'TN',DZA:'DZ',CHL:'CL',PER:'PE',VEN:'VE',
+  ECU:'EC',BOL:'BO',PRY:'PY',URY:'UY',GTM:'GT',HND:'HN',SLV:'SV',NIC:'NI',
+  CRI:'CR',PAN:'PA',DOM:'DO',CUB:'CU',HTI:'HT',NZL:'NZ',SGP:'SG',MMR:'MM',
+  KHM:'KH',LAO:'LA',HKG:'HK',TWN:'TW',MNG:'MN',NPL:'NP',LKA:'LK',
+  ISL:'IS',IRL:'IE',LUX:'LU',CYP:'CY',MLT:'MT',PRK:'KP',UGA:'UG',
+  MOZ:'MZ',SLE:'SL',GNB:'GW',GIN:'GN',TGO:'TG',BEN:'BJ',RWA:'RW',
+  MWI:'MW',NAM:'NA',BWA:'BW',LSO:'LS',SWZ:'SZ',DJI:'DJ',ERI:'ER',
+};
+function flagEmoji(iso3) {
+  const c = A3_A2[iso3];
+  if (!c) return '';
+  return String.fromCodePoint(...[...c].map(ch => 0x1F1E0 + ch.charCodeAt(0) - 65));
+}
+
+// ── Country lookup by alpha-3 ──
+const CM = {};
+D.iso3.forEach((k,i) => CM[k] = {
+  iso3:k, name:D.names[i], risk:D.risks[i], label:D.labels[i],
+  factors:D.factors[i], etf:D.etfs[i], news:D.news[i],
+  gdp:D.gdps[i], debt:D.debts[i], growth:D.growths[i],
+  exname:D.exnames[i],
+  idxTicker:D.idxTickers[i], idxPrice:D.idxPrices[i],
+  idxYtd:D.idxYtds[i], idxDay:D.idxDays[i],
+});
+
+// ── Risk color scale ──
+const riskScale = d3.scaleLinear()
+  .domain([1, 3, 5, 7, 10])
+  .range(['#0a3d20','#1a8c4a','#c49a38','#c0392b','#2d0808'])
+  .interpolate(d3.interpolateHcl)
+  .clamp(true);
+
+// ── Build legend ──
+(function() {
+  const leg = document.getElementById('legend');
+  const steps = [
+    [1,'1 LOW'],['',''],['',''],
+    [4,'4'],['',''],
+    [6,'6'],['',''],
+    [8,'8'],
+    [10,'10 EXTREME'],
+  ];
+  for (let r = 10; r >= 1; r--) {
+    const row = document.createElement('div');
+    row.className = 'leg-row';
+    const bar = document.createElement('div');
+    bar.className = 'leg-bar';
+    bar.style.background = riskScale(r);
+    const lbl = document.createElement('span');
+    lbl.className = 'leg-label';
+    if ([1,4,6,8,10].includes(r)) lbl.textContent = r;
+    row.appendChild(lbl);
+    row.appendChild(bar);
+    leg.appendChild(row);
+  }
+})();
+
+// ── SVG setup ──
+const mapEl = document.getElementById('map');
+let W = mapEl.clientWidth, H = mapEl.clientHeight;
+
+const svg = d3.select('#map').append('svg')
+  .attr('width', W).attr('height', H);
+
+// SVG defs: glow filter + ocean gradient
+const defs = svg.append('defs');
+
+// Glow
+const glow = defs.append('filter').attr('id','glow')
+  .attr('x','-30%').attr('y','-30%').attr('width','160%').attr('height','160%');
+glow.append('feGaussianBlur').attr('in','SourceGraphic')
+  .attr('stdDeviation','3').attr('result','blur');
+const fm = glow.append('feMerge');
+fm.append('feMergeNode').attr('in','blur');
+fm.append('feMergeNode').attr('in','SourceGraphic');
+
+// Subtle country highlight filter
+const hf = defs.append('filter').attr('id','hf')
+  .attr('x','-10%').attr('y','-10%').attr('width','120%').attr('height','120%');
+hf.append('feGaussianBlur').attr('in','SourceGraphic')
+  .attr('stdDeviation','1.5').attr('result','blur');
+const hfm = hf.append('feMerge');
+hfm.append('feMergeNode').attr('in','blur');
+hfm.append('feMergeNode').attr('in','SourceGraphic');
+
+// Ocean radial gradient
+const oceanGrad = defs.append('radialGradient').attr('id','ocean')
+  .attr('cx','50%').attr('cy','50%').attr('r','50%');
+oceanGrad.append('stop').attr('offset','0%').attr('stop-color','#0a0f18');
+oceanGrad.append('stop').attr('offset','100%').attr('stop-color','#020305');
+
+const g = svg.append('g');
+
+// ── Projection ──
+function makeProj() {
+  return d3.geoNaturalEarth1()
+    .scale(W / 6.1)
+    .translate([W / 2, H / 2]);
+}
+let proj = makeProj();
+let pathGen = d3.geoPath().projection(proj);
+
+// Ocean sphere
+g.append('path').datum({type:'Sphere'})
+  .attr('class','sphere')
+  .attr('fill','url(#ocean)');
+
+// Graticule
+g.append('path').datum(d3.geoGraticule()())
+  .attr('class','graticule')
+  .attr('fill','none')
+  .attr('stroke','rgba(255,255,255,0.028)')
+  .attr('stroke-width',0.5);
+
+// ── Load world ──
+let selectedEl = null;
+const tt = document.getElementById('tt');
+
+d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json').then(world => {
+  const features = topojson.feature(world, world.objects.countries).features;
+  const borders  = topojson.mesh(world, world.objects.countries, (a,b) => a !== b);
+
+  // Country fills
+  g.selectAll('.cty')
+    .data(features)
+    .join('path')
+    .attr('class','cty')
+    .attr('fill', d => {
+      const c = CM[N2A[+d.id]];
+      return c ? riskScale(c.risk) : '#141414';
+    })
+    .attr('stroke','none')
+    .on('mouseover', function(ev, d) {
+      const c = CM[N2A[+d.id]];
+      if (!c || this === selectedEl) return;
+      d3.select(this).raise()
+        .transition().duration(120)
+        .attr('stroke','rgba(255,255,255,.22)')
+        .attr('stroke-width', 0.8);
+      showTT(ev, c);
+    })
+    .on('mousemove', moveTT)
+    .on('mouseout', function(ev, d) {
+      if (this === selectedEl) return;
+      d3.select(this)
+        .transition().duration(200)
+        .attr('stroke','none')
+        .attr('stroke-width', 0);
+      hideTT();
+    })
+    .on('click', function(ev, d) {
+      const iso3 = N2A[+d.id];
+      const c = CM[iso3];
+      if (!c) return;
+      ev.stopPropagation();
+      // Deselect previous
+      if (selectedEl && selectedEl !== this) {
+        d3.select(selectedEl)
+          .transition().duration(300)
+          .attr('stroke','none').attr('filter',null).attr('stroke-width',0);
+      }
+      selectedEl = this;
+      d3.select(this).raise()
+        .transition().duration(200)
+        .attr('stroke','#33E29A')
+        .attr('stroke-width', 2)
+        .attr('filter','url(#hf)');
+      hideTT();
+      // Zoom to country centroid
+      zoomTo(d);
+      updateDetail(iso3, c);
+    });
+
+  // Country borders layer (drawn on top, pointer-events:none)
+  g.append('path').datum(borders)
+    .attr('class','borders')
+    .attr('fill','none')
+    .attr('stroke','rgba(255,255,255,.09)')
+    .attr('stroke-width',0.35)
+    .attr('pointer-events','none');
+
+  // Sphere outline
+  g.append('path').datum({type:'Sphere'})
+    .attr('fill','none')
+    .attr('stroke','rgba(255,255,255,.12)')
+    .attr('stroke-width',0.8)
+    .attr('pointer-events','none');
+
+  renderPaths();
+});
+
+function renderPaths() {
+  g.selectAll('path').attr('d', pathGen);
+}
+
+// ── Zoom ──
+const zoom = d3.zoom()
+  .scaleExtent([1, 12])
+  .translateExtent([[0,0],[W,H]])
+  .on('zoom', ev => {
+    g.attr('transform', ev.transform);
+    // Keep borders crisp at zoom
+    const k = ev.transform.k;
+    g.selectAll('.borders').attr('stroke-width', 0.35 / k);
+    g.selectAll('.graticule').attr('stroke-width', 0.5 / k);
+    if (selectedEl) d3.select(selectedEl).attr('stroke-width', 1.8 / k);
+  });
+svg.call(zoom);
+
+// Click on ocean to deselect
+svg.on('click', () => {
+  if (selectedEl) {
+    d3.select(selectedEl).attr('stroke','none').attr('filter',null);
+    selectedEl = null;
+  }
+});
+
+// ── Resize ──
+new ResizeObserver(() => {
+  W = mapEl.clientWidth; H = mapEl.clientHeight;
+  svg.attr('width', W).attr('height', H);
+  proj = makeProj();
+  pathGen = d3.geoPath().projection(proj);
+  renderPaths();
+  zoom.translateExtent([[0,0],[W,H]]);
+}).observe(mapEl);
+
+// ── Zoom to country ──
+function zoomTo(d) {
+  const [[x0,y0],[x1,y1]] = pathGen.bounds(d);
+  const dx = x1 - x0, dy = y1 - y0;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const scale = Math.min(8, 0.82 / Math.max(dx / W, dy / H));
+  const tx = W / 2 - scale * cx, ty = H / 2 - scale * cy;
+  svg.transition().duration(650).ease(d3.easeCubicInOut)
+    .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+// ── Tooltip ──
+function showTT(ev, c) {
+  const rc = 'b' + c.risk;
+  const gColor = c.growth && c.growth.startsWith('+') ? '#33E29A' : (c.growth && c.growth.startsWith('-') ? '#ef4444' : '#eaeaea');
+  const flag = flagEmoji(c.iso3 || '');
+  tt.innerHTML = `
+    <div class="tt-name">${flag}</span> ${c.name}</div>
+    <div class="tt-row"><span class="badge ${rc}">${c.risk}/10 — ${c.label}</span></div>
+    <div class="tt-sep"></div>
+    <div class="tt-row">GDP <span class="tt-val">${c.gdp}</span> &nbsp;//&nbsp; Debt/GDP <span class="tt-val">${c.debt}</span></div>
+    <div class="tt-row">2025 Growth <span class="tt-val" style="color:${gColor}">${c.growth}</span></div>
+    <div class="tt-row">ETF <span class="tt-val">${c.etf}</span></div>
+    <div class="tt-sep"></div>
+    <div class="tt-row">Exchange <span class="tt-val" style="color:#E9B86E">${c.exname}</span></div>
+    <div class="tt-row">${c.idxTicker} <span class="tt-val">${c.idxPrice}</span></div>
+    <div class="tt-row">Day <span class="tt-val" style="color:${c.idxDay&&c.idxDay.startsWith('+')?'#33E29A':c.idxDay&&c.idxDay.startsWith('-')?'#ef4444':'#eaeaea'}">${c.idxDay}</span> &nbsp;//&nbsp; YTD <span class="tt-val" style="color:${c.idxYtd&&c.idxYtd.startsWith('+')?'#33E29A':c.idxYtd&&c.idxYtd.startsWith('-')?'#ef4444':'#eaeaea'}">${c.idxYtd}</span></div>
+  `;
+  tt.style.display = 'block';
+  moveTT(ev);
+}
+function moveTT(ev) {
+  let x = ev.clientX + 16, y = ev.clientY - 12;
+  if (x + 310 > window.innerWidth)  x = ev.clientX - 316;
+  if (y + 120 > window.innerHeight) y = ev.clientY - 130;
+  tt.style.left = x + 'px';
+  tt.style.top  = y + 'px';
+}
+function hideTT() { tt.style.display = 'none'; }
+
+// ── Detail panel ──
+function updateDetail(iso3, c) {
+  const rc = 'b' + c.risk;
+  const flag = flagEmoji(iso3);
+  document.getElementById('detail').innerHTML = `
+    <div class="d-block">
+      <span class="lbl">Country</span>
+      <span class="val" style="font-family:'Sofia Sans Semi Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:#33E29A;letter-spacing:.04em">
+        ${flag ? `<span style="font-size:1.5rem;margin-right:.35rem;vertical-align:middle">${flag}</span>` : ''}${c.name}
+      </span>
+      <span class="lbl" style="margin-top:.3rem">ISO-3</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:#444;font-size:.72rem">${iso3}</span>
+    </div>
+    <div class="d-block" style="max-width:250px">
+      <span class="lbl">Geopolitical Risk</span>
+      <span class="val"><span class="badge ${rc}">${c.risk}/10 — ${c.label}</span></span>
+      <span class="lbl" style="margin-top:.32rem">Key Factors</span>
+      <span class="val" style="color:#B6B6B6;font-size:.8rem">${c.factors}</span>
+    </div>
+    <div class="d-block">
+      <span class="lbl">GDP 2024</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:#33E29A">${c.gdp}</span>
+      <span class="lbl" style="margin-top:.32rem">2025 Growth Est.</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:${c.growth&&c.growth.startsWith('+')?'#33E29A':c.growth&&c.growth.startsWith('-')?'#ef4444':'#B6B6B6'}">${c.growth}</span>
+      <span class="lbl" style="margin-top:.32rem">Debt / GDP</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:#E9B86E">${c.debt}</span>
+    </div>
+    <div class="d-block">
+      <span class="lbl">iShares ETF</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:#33E29A;font-size:.84rem">${c.etf}</span>
+    </div>
+    <div class="d-block">
+      <span class="lbl">Stock Exchange</span>
+      <span class="val" style="color:#E9B86E;font-size:.82rem">${c.exname}</span>
+      <span class="lbl" style="margin-top:.32rem">Index</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:#eaeaea;font-size:.82rem">${c.idxTicker}</span>
+      <span class="lbl" style="margin-top:.32rem">Price</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;color:#33E29A;font-size:.82rem">${c.idxPrice}</span>
+      <span class="lbl" style="margin-top:.32rem">Day Change</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;font-size:.82rem;color:${c.idxDay&&c.idxDay.startsWith('+')?'#33E29A':c.idxDay&&c.idxDay.startsWith('-')?'#ef4444':'#B6B6B6'}">${c.idxDay}</span>
+      <span class="lbl" style="margin-top:.32rem">YTD</span>
+      <span class="val" style="font-family:'Oxygen Mono',monospace;font-size:.82rem;color:${c.idxYtd&&c.idxYtd.startsWith('+')?'#33E29A':c.idxYtd&&c.idxYtd.startsWith('-')?'#ef4444':'#B6B6B6'}">${c.idxYtd}</span>
+    </div>
+    <div class="d-block" style="max-width:360px;flex:1">
+      <span class="lbl">Latest News</span>
+      <span class="val" style="color:#E9B86E;font-size:.8rem;line-height:1.55">${c.news}</span>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
